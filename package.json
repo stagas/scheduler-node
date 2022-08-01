@@ -3,7 +3,7 @@
   "author": "stagas",
   "short": "stagas/scheduler-node",
   "description": "Sample perfect Audioworklet MIDI Scheduler Node",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -112,10 +112,10 @@
     "alice-bob": "^2.0.0",
     "event-toolkit": "^1.0.1",
     "everyday-utils": "^1.0.0",
-    "immutable-map-set": "^0.0.1",
-    "json-objectify": "^0.0.1",
-    "serialize-whatever": "^0.0.1",
-    "synced-set": "^0.0.1",
+    "immutable-map-set": "^1.0.0",
+    "json-objectify": "^1.0.0",
+    "serialize-whatever": "^1.0.0",
+    "synced-set": "^1.0.0",
     "webaudio-tools": "^2.0.0"
   }
 }
