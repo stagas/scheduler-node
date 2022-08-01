@@ -1,0 +1,121 @@
+{
+  "name": "scheduler-node",
+  "author": "stagas",
+  "short": "stagas/scheduler-node",
+  "description": "Sample perfect Audioworklet MIDI Scheduler Node",
+  "version": "0.0.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://git@github.com:stagas/scheduler-node.git"
+  },
+  "keywords": [],
+  "types": "./dist/types/index.d.ts",
+  "module": "dist/esm/index.js",
+  "main": "dist/cjs/index.js",
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    },
+    "./node": {
+      "import": "./dist/esm/scheduler-node.js",
+      "require": "./dist/cjs/scheduler-node.js"
+    },
+    "./processor": {
+      "import": "./dist/esm/scheduler-processor.js",
+      "require": "./dist/cjs/scheduler-processor.js"
+    },
+    "./target-node": {
+      "import": "./dist/esm/scheduler-target-node.js",
+      "require": "./dist/cjs/scheduler-target-node.js"
+    },
+    "./target-processor": {
+      "import": "./dist/esm/scheduler-target-processor.js",
+      "require": "./dist/cjs/scheduler-target-processor.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "node": [
+        "./dist/types/scheduler-node.d.ts"
+      ],
+      "processor": [
+        "./dist/types/scheduler-processor.d.ts"
+      ],
+      "target-node": [
+        "./dist/types/scheduler-target-node.d.ts"
+      ],
+      "target-processor": [
+        "./dist/types/scheduler-target-processor.d.ts"
+      ]
+    }
+  },
+  "files": [
+    "dist",
+    "!**/*.tsbuildinfo"
+  ],
+  "scripts": {
+    "start:web": "vite-open example/web --https",
+    "start:web:debugging": "vite-open example/web --https --debugging-this",
+    "start:node": "onchange -i src example -- swcno example/node.ts",
+    "build:watch": "fastpm autolink && tsc -p tsconfig.dist.json --outDir dist/types --watch & swc -w -C module.type=commonjs ./src -d dist/cjs -w & swc -w -C module.type=es6 ./src -d dist/esm",
+    "build:dist": "npm run build:bundle && npm run build:min",
+    "cov:watch": "utr --coverage --watch",
+    "clean": "rimraf dist",
+    "docs": "dokio -o README.md && dprint fmt README.md",
+    "test": "npm run test:node && npm run test:web",
+    "test:node": "if find test -type f -iregex '.*\\.spec\\.\\(js\\|jsx\\|ts\\|tsx\\)$' | grep -q .; then utr 'test/*.spec.{js,jsx,ts,tsx}'; else echo no node tests; fi",
+    "test:web": "if find test -type f -iregex '.*\\.spec\\.web\\.\\(js\\|jsx\\|ts\\|tsx\\)$' | grep -q .; then utr --browser 'test/*.spec.web.{js,jsx,ts,tsx}'; else echo no web tests; fi",
+    "cov": "utr --coverage",
+    "build": "npm run build:cjs & npm run build:esm & npm run build:types && echo done.",
+    "build:cjs": "swc -C module.type=commonjs ./src -d dist/cjs",
+    "build:esm": "swc -C module.type=es6 ./src -d dist/esm && echo '{\"type\":\"module\"}' >dist/esm/package.json",
+    "build:types": "tsc -p tsconfig.dist.json --outDir dist/types",
+    "build:bundle": "bunzee src/index.ts \"dist/$(cat package.json | jq -r '.name').js\"",
+    "build:min": "bunzee -m src/index.ts \"dist/$(cat package.json | jq -r '.name').min.js\"",
+    "lint": "eslint src && dprint check",
+    "lint:fix": "eslint --fix src && dprint fmt",
+    "prepack": "npm run clean && npm run build && (npm run build:dist || echo unable to bundle)",
+    "prepack:dry": "npm pack --dry-run",
+    "prepush": "npm run lint && npm run test",
+    "prepare": "husky install"
+  },
+  "devDependencies": {
+    "@n1kk/intspector": "1.0.2",
+    "@swc/cli": "0.1.57",
+    "@swc/core": "1.2.218",
+    "@tsconfig/node16": "1.0.3",
+    "@types/audioworklet": "0.0.30",
+    "@types/jest": "27.5.2",
+    "@types/node": "17.0.45",
+    "@types/webmidi": "2.0.6",
+    "@typescript-eslint/eslint-plugin": "5.31.0",
+    "@typescript-eslint/parser": "5.31.0",
+    "bunzee": "^1.0.0",
+    "dokio": "^0.0.2",
+    "dprint": "0.30.3",
+    "eslint": "8.20.0",
+    "eslint-config-html-jsx": "^1.0.0",
+    "eslint-plugin-import": "2.26.0",
+    "eslint-plugin-react": "7.30.1",
+    "husky": "7.0.4",
+    "onchange": "7.1.0",
+    "pull-configs": "^0.2.0",
+    "rimraf": "3.0.2",
+    "swcno": "0.1.1",
+    "typescript": "4.7.3",
+    "utr": "^0.2.0",
+    "vite-open": "^3.0.1"
+  },
+  "dependencies": {
+    "alice-bob": "^2.0.0",
+    "event-toolkit": "^1.0.1",
+    "everyday-utils": "^1.0.0",
+    "immutable-map-set": "^0.0.1",
+    "json-objectify": "^0.0.1",
+    "serialize-whatever": "^0.0.1",
+    "synced-set": "^0.0.1",
+    "webaudio-tools": "^2.0.0"
+  }
+}

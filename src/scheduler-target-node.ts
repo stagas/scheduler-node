@@ -1,0 +1,39 @@
+import { Agent, Alice } from 'alice-bob'
+import { cheapRandomId } from 'everyday-utils'
+import { SchedulerTarget } from './scheduler-event'
+import type { SchedulerTargetProcessor } from './scheduler-target-processor'
+
+export class SchedulerTargetNode extends AudioWorkletNode {
+  id = cheapRandomId()
+
+  schedulerTarget = new SchedulerTarget()
+
+  worklet: Agent<SchedulerTargetProcessor, SchedulerTargetNode>
+
+  constructor(context: BaseAudioContext, name: string, options: AudioWorkletNodeOptions = {}) {
+    // add a phony tail input, used for connecting the
+    // scheduler to execute right before our worklet
+    options.numberOfInputs = (options.numberOfInputs ?? 0) + 1
+
+    super(context, name, options)
+
+    const [node, worklet] = new Alice<SchedulerTargetNode, SchedulerTargetProcessor>(
+      data => void this.port.postMessage(data)
+    ).agents({ debug: false })
+
+    this.port.onmessage = ({ data }) => node.receive(data)
+    // TODO: handle onprocessorerror
+    this.worklet = worklet
+  }
+
+  async init() {
+    await this.worklet.init(this.schedulerTarget.midiQueue.buffer)
+  }
+
+  processMidiEvent(midiEvent: WebMidi.MIDIMessageEvent) {
+    if (midiEvent.receivedTime == null) {
+      throw new Error('Midi event missing receivedTime')
+    }
+    this.schedulerTarget.midiQueue.push(midiEvent.receivedTime, ...midiEvent.data)
+  }
+}

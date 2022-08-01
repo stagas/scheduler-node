@@ -1,0 +1,42 @@
+
+exports[`getEventsInRange() start 1`] = `
+Array [
+  Array [
+    0,
+    Object {
+      "id": "255s",
+      "midiEvent": Object {
+        "data": Uint8Array [
+          1,
+          1,
+          1,
+        ],
+        "receivedTime": 0,
+      },
+    },
+  ],
+]
+`;
+
+exports[`getEventsInRange() edge 1`] = `Array []`;
+
+exports[`getEventsInRange() edge 2`] = `
+Array [
+  Array [
+    12800,
+    Object {
+      "id": "4abk",
+      "midiEvent": Object {
+        "data": Uint8Array [
+          1,
+          1,
+          1,
+        ],
+        "receivedTime": 0,
+      },
+    },
+  ],
+]
+`;
+
+exports[`getEventsInRange() edge 3`] = `Array []`;
