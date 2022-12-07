@@ -49,7 +49,7 @@ export class SchedulerEventGroup {
   loopPoints = new Float64Array(
     new SharedArrayBuffer(
       3 // [loopActive, loopStart, loopEnd]
-        * Float64Array.BYTES_PER_ELEMENT
+      * Float64Array.BYTES_PER_ELEMENT
     )
   )
 
@@ -105,10 +105,13 @@ export class SchedulerEventGroup {
   }
 }
 
-export class SchedulerEventGroupNode {
+export class SchedulerEventGroupNode extends EventTarget {
   eventGroup = new SchedulerEventGroup()
 
+  declare onconnectchange: (ev: CustomEvent) => void
+
   constructor(public schedulerNode: SchedulerNode) {
+    super()
     this.schedulerNode.eventGroups.add(this.eventGroup)
   }
 
@@ -119,11 +122,13 @@ export class SchedulerEventGroupNode {
   connect(targetNode: SchedulerTargetNode) {
     this.schedulerNode.connect(targetNode)
     this.eventGroup.targets = this.eventGroup.targets.add(targetNode.schedulerTarget)
+    this.dispatchEvent(new CustomEvent('connectchange'))
     return targetNode
   }
 
   disconnect(targetNode: SchedulerTargetNode) {
     this.schedulerNode.disconnect(targetNode)
     this.eventGroup.targets = this.eventGroup.targets.delete(targetNode.schedulerTarget)
+    this.dispatchEvent(new CustomEvent('connectchange'))
   }
 }

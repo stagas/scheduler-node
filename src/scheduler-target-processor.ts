@@ -7,8 +7,17 @@ export { MIDIMessageEvent }
 
 const sortByFrame = (a: MIDIMessageEvent, b: MIDIMessageEvent) => a.offsetFrame - b.offsetFrame
 
+const midiEvents: MIDIMessageEvent[] = []
+const midiEventPool = Array.from(
+  { length: 128 },
+  () => new MIDIMessageEvent('midimessage', { data: new Uint8Array(3) })
+)
+let midiEventPoolPtr = 0
+
 export abstract class SchedulerTargetProcessor extends AudioWorkletProcessor {
   private midiQueue = new MessageQueue()
+
+  private didError = false
 
   constructor() {
     super()
@@ -19,6 +28,10 @@ export abstract class SchedulerTargetProcessor extends AudioWorkletProcessor {
     ).agents({ debug: false })
 
     this.port.onmessage = ({ data }) => worklet.receive(data)
+  }
+
+  async resetError() {
+    this.didError = false
   }
 
   async init(buffer: MessageQueue['buffer']) {
@@ -39,20 +52,28 @@ export abstract class SchedulerTargetProcessor extends AudioWorkletProcessor {
     outputs: Float32Array[][],
     parameters: Record<string, Float32Array>,
   ): boolean {
+    if (this.didError) return true
+
     // TODO: optimizations possible:
     //  reuse midiEvents
     //  events pool
     //  sort by hash?
-    const midiEvents: MIDIMessageEvent[] = []
 
     let message: MessageQueue['buffer'] | void
 
     let prevFrame = 0
 
-    while ((message = this.midiQueue.slice(4))) {
-      const event = new MIDIMessageEvent('midimessage', {
-        data: new Uint8Array(message.slice(1)),
-      })
+    let max = 16
+
+    midiEvents.splice(0)
+
+    while ((message = this.midiQueue.slice(4)) && max--) {
+      const event = midiEventPool[midiEventPoolPtr]
+      midiEventPoolPtr = (midiEventPoolPtr + 1) % midiEventPool.length
+      event.data.set(message.subarray(1))
+      // new MIDIMessageEvent('midimessage', {
+      //   data: new Uint8Array(message.subarray(1)),
+      // })
       // receivedTime === 0 signifies "process as soon as possible"
       // so we give it our currentTime
       event.receivedTime = message[0] || (currentTime * 1000)
@@ -68,6 +89,12 @@ export abstract class SchedulerTargetProcessor extends AudioWorkletProcessor {
       this.processMidiEvents(midiEvents)
     }
 
-    return this.processWithMidi(inputs, outputs, parameters, midiEvents)
+    try {
+      return this.processWithMidi(inputs, outputs, parameters, midiEvents)
+    } catch (error) {
+      console.warn(error)
+      this.didError = true
+      return true
+    }
   }
 }

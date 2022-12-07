@@ -3,6 +3,16 @@ import { cheapRandomId } from 'everyday-utils'
 import { SchedulerTarget } from './scheduler-event'
 import type { SchedulerTargetProcessor } from './scheduler-target-processor'
 
+const xfer = (args: any) => {
+  const xfers = []
+  for (const arg of args) {
+    if (arg instanceof MessagePort) {
+      xfers.push(arg)
+    }
+  }
+  return xfers
+}
+
 export class SchedulerTargetNode extends AudioWorkletNode {
   id = cheapRandomId()
 
@@ -18,7 +28,7 @@ export class SchedulerTargetNode extends AudioWorkletNode {
     super(context, name, options)
 
     const [node, worklet] = new Alice<SchedulerTargetNode, SchedulerTargetProcessor>(
-      data => void this.port.postMessage(data)
+      data => void this.port.postMessage(data, xfer(data.args))
     ).agents({ debug: false })
 
     this.port.onmessage = ({ data }) => node.receive(data)

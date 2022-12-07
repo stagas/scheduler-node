@@ -14,7 +14,7 @@ export interface SyncedSetPayload {
   events: ImmSet<SchedulerEvent>
 }
 
-export class SchedulerNode {
+export class SchedulerNode extends EventTarget {
   private static registeredCtx = new WeakSet<BaseAudioContext>()
 
   static async register(context: BaseAudioContext) {
@@ -62,6 +62,8 @@ export class SchedulerNode {
   }
 
   constructor(public context: BaseAudioContext) {
+    super()
+
     this.node = new AudioWorkletNode(this.context, 'scheduler')
 
     const [scheduler, worklet] = new Alice<SchedulerNode, SchedulerProcessor>(
