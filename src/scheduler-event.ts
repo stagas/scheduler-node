@@ -107,6 +107,7 @@ export class SchedulerEventGroup {
 
 export class SchedulerEventGroupNode extends EventTarget {
   eventGroup = new SchedulerEventGroup()
+  targetNodes = new Set<SchedulerTargetNode>()
 
   declare onconnectchange: (ev: CustomEvent) => void
 
@@ -121,6 +122,7 @@ export class SchedulerEventGroupNode extends EventTarget {
 
   connect(targetNode: SchedulerTargetNode) {
     this.schedulerNode.connect(targetNode)
+    this.targetNodes.add(targetNode)
     this.eventGroup.targets = this.eventGroup.targets.add(targetNode.schedulerTarget)
     this.dispatchEvent(new CustomEvent('connectchange'))
     return targetNode
@@ -128,6 +130,7 @@ export class SchedulerEventGroupNode extends EventTarget {
 
   disconnect(targetNode: SchedulerTargetNode) {
     this.schedulerNode.disconnect(targetNode)
+    this.targetNodes.delete(targetNode)
     this.eventGroup.targets = this.eventGroup.targets.delete(targetNode.schedulerTarget)
     this.dispatchEvent(new CustomEvent('connectchange'))
   }
