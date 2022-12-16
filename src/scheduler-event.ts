@@ -6,6 +6,8 @@ import { MessageQueue } from './message-queue'
 import { SchedulerNode } from './scheduler-node'
 import { SchedulerTargetNode } from './scheduler-target-node'
 
+export type NoteEvent = [number, number, number, number]
+
 export class SchedulerEvent {
   id = cheapRandomId()
 
@@ -87,13 +89,7 @@ export class SchedulerEventGroup {
     this.loopPoints[2] = seconds
   }
 
-  replaceAllWithNotes(notes: [number, number, number, number][]) {
-    const midiEvents = []
-
-    for (const [time, note, velocity, length] of notes) {
-      midiEvents.push(...createMidiNoteEvents(time, note, velocity, length))
-    }
-
+  replaceAllWithMidiEvents(midiEvents: WebMidi.MIDIMessageEvent[]) {
     this.events = this.events.clear()
 
     for (const midiEvent of midiEvents) {
@@ -103,6 +99,21 @@ export class SchedulerEventGroup {
 
     return midiEvents
   }
+
+  replaceAllWithNotes(notes: NoteEvent[]) {
+    const midiEvents = getMidiEventsForNotes(notes)
+    return this.replaceAllWithMidiEvents(midiEvents)
+  }
+}
+
+export function getMidiEventsForNotes(notes: NoteEvent[]) {
+  const midiEvents = []
+
+  for (const [time, note, velocity, length] of notes) {
+    midiEvents.push(...createMidiNoteEvents(time, note, velocity, length))
+  }
+
+  return midiEvents
 }
 
 export class SchedulerEventGroupNode extends EventTarget {
