@@ -7,6 +7,8 @@ import { getEventsInRange } from './util'
 import type { SchedulerEventGroup } from './scheduler-event'
 import type { SchedulerNode } from './scheduler-node'
 
+let lastReceivedTime = currentTime
+
 export class SchedulerProcessor extends AudioWorkletProcessor {
   blockSize = 128
 
@@ -17,6 +19,7 @@ export class SchedulerProcessor extends AudioWorkletProcessor {
   coeff = 1
   playbackStartTime = 0
   adjustedStartTime = 0
+  internalTime = 0
   running = false
 
   eventGroups = new SyncedSet<SchedulerEventGroup, null>({
@@ -44,26 +47,33 @@ export class SchedulerProcessor extends AudioWorkletProcessor {
     this.running = true
     this.playbackStartTime = playbackStartTime
     this.adjustedStartTime = this.playbackStartTime * this.coeff
-    return playbackStartTime
+    this.internalTime = this.adjustedStartTime
+    lastReceivedTime = playbackStartTime
+    return this.playbackStartTime
   }
 
   stop() {
     this.running = false
   }
 
-  setBpm(bpm: number) {
+  async setBpm(bpm: number) {
     this.bpm = bpm
 
-    this.coeff = 2 / ((60 * 4) / this.bpm)
+    this.coeff = 1 / ((60 * 4) / this.bpm)
     this.sampleTime = (1 / sampleRate) / this.coeff
     this.quantumDurationTime = (this.blockSize / sampleRate) * this.coeff
 
-    const diff = currentTime - this.playbackStartTime
-    this.adjustedStartTime = (currentTime - diff) * this.coeff
+    return this.coeff
   }
 
   process() {
     if (!this.running) return true
+
+    const now = currentTime
+    const elapsedTime = now - lastReceivedTime
+    lastReceivedTime = now
+
+    this.internalTime += elapsedTime * this.coeff
 
     for (const eventGroup of this.eventGroups) {
       const events = getEventsInRange(
@@ -71,23 +81,14 @@ export class SchedulerProcessor extends AudioWorkletProcessor {
         eventGroup.loop,
         eventGroup.loopStart,
         eventGroup.loopEnd,
-        // TODO: a better version requires an internal clock
-        //  that adjusts its speed based on the currentFrame
-        //  and "speeds up/down" from its current position,
-        //  rather than shifting the entire clock up/down
-        //  but this is good enough for now.
-        //  That clock would have to be shared with the UI
-        //  using a shared buffer element so the transport
-        //  shows the right position (now uses currentTime
-        //  and repeats the calculation).
-        currentTime * this.coeff,
+        this.internalTime,
         this.sampleTime,
         this.quantumDurationTime,
         this.adjustedStartTime
       )
       for (const target of eventGroup.targets) {
         for (const [receivedTime, event] of events) {
-          target.midiQueue.push(receivedTime / this.coeff, ...event.midiEvent.data)
+          target.midiQueue.push(receivedTime, ...event.midiEvent.data)
         }
       }
     }
