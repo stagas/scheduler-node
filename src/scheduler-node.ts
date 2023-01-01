@@ -9,9 +9,9 @@ import type { ImmSet } from 'immutable-map-set'
 import type { SchedulerProcessor } from './scheduler-processor'
 import type { SchedulerTargetNode } from './scheduler-target-node'
 
-export interface SyncedSetPayload {
+export interface SchedulerSyncedSetPayload {
   targets: ImmSet<SchedulerTarget>
-  events: ImmSet<SchedulerEvent>
+  events?: { id: string, events: Set<SchedulerEvent> }
 }
 
 export class SchedulerNode extends EventTarget {
@@ -34,7 +34,7 @@ export class SchedulerNode extends EventTarget {
 
   targetNodes = new Set<SchedulerTargetNode>()
 
-  eventGroups = new SyncedSet<SchedulerEventGroup, SyncedSetPayload>({
+  eventGroups = new SyncedSet<SchedulerEventGroup, SchedulerSyncedSetPayload>({
     send: queue.task((payload, cb) => {
       //!? 'sending'
       this.node.port.postMessage({ eventGroups: core.serialize(payload) })
@@ -47,7 +47,8 @@ export class SchedulerNode extends EventTarget {
     }),
     equal: (prev, next) => (
       prev.targets === next.targets
-      && prev.events === next.events
+      && !!prev.events && !!next.events
+      && prev.events?.id === next.events?.id
     ),
   })
 
@@ -61,13 +62,18 @@ export class SchedulerNode extends EventTarget {
     this.eventGroups.delete(eventGroup)
   }
 
+  requestNextEvents(id: string, turn = 0) {
+    [...this.eventGroups].find((eventGroup) => eventGroup.id === id)?.onRequestNotes?.(turn)
+  }
+
   constructor(public context: BaseAudioContext) {
     super()
 
     this.node = new AudioWorkletNode(this.context, 'scheduler')
 
     const [scheduler, worklet] = new Alice<SchedulerNode, SchedulerProcessor>(
-      data => void this.node.port.postMessage({ rpc: data })
+      data => void this.node.port.postMessage({ rpc: data }),
+      this
     ).agents({ debug: false })
 
     this.node.port.onmessage = ({ data }) => {
@@ -78,8 +84,8 @@ export class SchedulerNode extends EventTarget {
     this.worklet = worklet
   }
 
-  start() {
-    return this.worklet.start()
+  start(playbackStartTime?: number) {
+    return this.worklet.start(playbackStartTime)
   }
 
   stop() {

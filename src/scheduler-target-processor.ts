@@ -71,11 +71,6 @@ export abstract class SchedulerTargetProcessor extends AudioWorkletProcessor {
       const event = midiEventPool[midiEventPoolPtr]
       midiEventPoolPtr = (midiEventPoolPtr + 1) % midiEventPool.length
       event.data.set(message.subarray(1))
-      // new MIDIMessageEvent('midimessage', {
-      //   data: new Uint8Array(message.subarray(1)),
-      // })
-      // receivedTime === 0 signifies "process as soon as possible"
-      // so we give it our currentTime
       event.receivedTime = message[0] || (currentTime * 1000)
       event.receivedFrame = Math.floor(event.receivedTime * 0.001 * sampleRate)
       event.offsetFrame = event.receivedFrame - currentFrame

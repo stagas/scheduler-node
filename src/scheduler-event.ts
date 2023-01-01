@@ -1,3 +1,4 @@
+import { ValuesOf } from 'everyday-types'
 import { cheapRandomId } from 'everyday-utils'
 import { ImmSet } from 'immutable-map-set'
 import { createMidiNoteEvents } from 'webaudio-tools/midi-events'
@@ -8,10 +9,25 @@ import { SchedulerTargetNode } from './scheduler-target-node'
 
 export type NoteEvent = [number, number, number, number]
 
+export const LoopKind = {
+  Once: 0,
+  Loop: 1,
+  Live: 2,
+} as const
+export type LoopKind = ValuesOf<typeof LoopKind>
+
 export class SchedulerEvent {
   id = cheapRandomId()
 
-  midiEvent = { data: new Uint8Array(3), receivedTime: 0 }
+  playedAt = -1
+
+  midiEvent = {
+    data: new Uint8Array(3),
+    receivedTime: 0,
+  } as {
+    data: Uint8Array
+    receivedTime: number
+  }
 
   constructor(data: Partial<SchedulerEvent> = {}) {
     this.id = data.id ?? this.id
@@ -46,7 +62,7 @@ export class SchedulerEventGroup {
   id = cheapRandomId()
 
   targets = new ImmSet<SchedulerTarget>()
-  events = new ImmSet<SchedulerEvent>()
+  events?: { id: string, turn: number, events: Set<SchedulerEvent> }
 
   loopPoints = new Float64Array(
     new SharedArrayBuffer(
@@ -69,10 +85,10 @@ export class SchedulerEventGroup {
   }
 
   get loop() {
-    return !!this.loopPoints[0]
+    return this.loopPoints[0] as LoopKind
   }
-  set loop(value: boolean) {
-    this.loopPoints[0] = +value
+  set loop(value: LoopKind) {
+    this.loopPoints[0] = value
   }
 
   get loopStart() {
@@ -89,20 +105,21 @@ export class SchedulerEventGroup {
     this.loopPoints[2] = seconds
   }
 
-  replaceAllWithMidiEvents(midiEvents: WebMidi.MIDIMessageEvent[]) {
-    this.events = this.events.clear()
+  declare onRequestNotes?: (turn: number) => void
 
+  setMidiEvents(midiEvents: WebMidi.MIDIMessageEvent[], turn = 0) {
+    const events = new Set<SchedulerEvent>()
     for (const midiEvent of midiEvents) {
       const event = new SchedulerEvent({ midiEvent })
-      this.events = this.events.add(event)
+      events.add(event)
     }
-
+    this.events = { id: cheapRandomId(), turn, events }
     return midiEvents
   }
 
-  replaceAllWithNotes(notes: NoteEvent[]) {
+  setNotes(notes: NoteEvent[], turn = 0) {
     const midiEvents = getMidiEventsForNotes(notes)
-    return this.replaceAllWithMidiEvents(midiEvents)
+    return this.setMidiEvents(midiEvents, turn)
   }
 }
 

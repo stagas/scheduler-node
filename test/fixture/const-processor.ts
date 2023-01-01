@@ -1,7 +1,7 @@
 import { MIDIMessageEvent, SchedulerTargetProcessor } from '../../dist/esm/scheduler-target-processor'
 
-class IncProcessor extends SchedulerTargetProcessor {
-  count = 0
+class ConstProcessor extends SchedulerTargetProcessor {
+  value = 0
 
   processMidiEvents() { }
 
@@ -11,17 +11,18 @@ class IncProcessor extends SchedulerTargetProcessor {
     _parameters: Record<string, Float32Array>,
     events: MIDIMessageEvent[],
   ): boolean {
-    let i = 0
+    // let i = 0
 
     if (events.length) {
-      this.count = events[0].data[1]
-      i = events[0].offsetFrame
+      this.value = events[0].data[1]
+      // i = events[0].offsetFrame
+      // console.log(i, currentFrame, events[0])
     }
 
-    outputs[0][0][i] = ++this.count
-    outputs[0][0][i + 1] = ++this.count
+    outputs[0][0].fill(this.value)
+
     return true
   }
 }
 
-registerProcessor('inc', IncProcessor)
+registerProcessor('const', ConstProcessor)
