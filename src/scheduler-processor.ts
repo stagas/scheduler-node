@@ -2,7 +2,7 @@ import { Bob } from 'alice-bob'
 import { SyncedSet } from 'synced-set'
 
 import { core } from './scheduler-core'
-import { ceilPrecision, floorPrecision, getEventsInRange, roundPrecision } from './util'
+import { getEventsInRange } from './util'
 
 import type { SchedulerEvent, SchedulerEventGroup } from './scheduler-event'
 import type { SchedulerNode, SchedulerSyncedSetPayload } from './scheduler-node'
