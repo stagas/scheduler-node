@@ -2,7 +2,7 @@ import { Bob } from 'alice-bob'
 import { SyncedSet } from 'synced-set'
 
 import { core } from './scheduler-core'
-import { getEventsInRange } from './util'
+import { ceilPrecision, floorPrecision, getEventsInRange, roundPrecision } from './util'
 
 import type { SchedulerEvent, SchedulerEventGroup } from './scheduler-event'
 import type { SchedulerNode, SchedulerSyncedSetPayload } from './scheduler-node'
@@ -28,16 +28,15 @@ export class SchedulerProcessor extends AudioWorkletProcessor {
     pick: core.pickFromLocal,
     reducer: eventGroup => ({
       targets: eventGroup.targets,
-      events: eventGroup.events,
     }),
     equal: (prev, next) => (
       prev.targets === next.targets
-      && !!prev.events && !!next.events
-      && prev.events?.id === next.events?.id
     ),
   })
 
-  queue = new Map<SchedulerEventGroup, Map<number, Set<SchedulerEvent>>>()
+  suspended = new Set<string>()
+
+  turns = new Map<SchedulerEventGroup, Map<number, Set<SchedulerEvent>>>()
 
   node: SchedulerNode
 
@@ -57,55 +56,34 @@ export class SchedulerProcessor extends AudioWorkletProcessor {
     }
 
     this.eventGroups.on('add', (eventGroup) => {
-      this.queue.set(eventGroup, eventGroup.events
-        ? new Map([[eventGroup.events.turn, eventGroup.events.events]])
-        : new Map()
-      )
+      this.turns.set(eventGroup, new Map())
+      this.requestNextEvents(eventGroup.id, 0)
     })
 
     this.eventGroups.on('delete', (eventGroup) => {
-      this.queue.delete(eventGroup)
-    })
-
-    this.eventGroups.on('update', (eventGroup, key) => {
-      if (key === 'events') {
-        const evs = eventGroup.events
-        if (evs) {
-          const queue = this.queue.get(eventGroup)!
-          queue.set(evs.turn, evs.events)
-          console.log('received', evs.turn)
-          if (this.waitingEvents.has(eventGroup.id)) {
-            this.waitingEvents.delete(eventGroup.id)
-          } else {
-            this.waitingEvents.add(eventGroup.id)
-            this.node.requestNextEvents(eventGroup.id, evs.turn + 1)
-          }
-        }
-      }
+      this.turns.delete(eventGroup)
     })
   }
 
   async start(playbackStartTime = currentTime) {
     this.running = true
     this.diffTime = playbackStartTime - currentTime
-    this.playbackStartTime = playbackStartTime //playbackStartTime
+    this.playbackStartTime = playbackStartTime
     this.adjustedStartTime = this.playbackStartTime * this.coeff
-    this.internalTime = -this.diffTime //this.adjustedStartTime //- this.diffTime //- this.diffTime //- this.diffTime * this.coeff
-    lastReceivedTime = currentTime
+    this.internalTime = -this.diffTime
 
-    for (const sets of this.queue.values()) {
-      sets.forEach((evs) => {
-        evs.forEach((ev) => {
-          ev.playedAt = -1
-        })
-      })
-    }
+    lastReceivedTime = currentTime
 
     return this.playbackStartTime
   }
 
   stop() {
     this.running = false
+
+    this.eventGroups.forEach((eventGroup) => {
+      this.turns.get(eventGroup)!.clear()
+      this.requestNextEvents(eventGroup.id, 0)
+    })
   }
 
   async setBpm(bpm: number) {
@@ -118,7 +96,34 @@ export class SchedulerProcessor extends AudioWorkletProcessor {
     return this.coeff
   }
 
+  suspendTarget(targetId: string) {
+    this.suspended.add(targetId)
+  }
+
+  resumeTarget(targetId: string) {
+    this.suspended.delete(targetId)
+  }
+
   waitingEvents = new Set<string>()
+
+  receiveEvents(eventGroupId: string, turn: number, [turn0, turn1]: Set<SchedulerEvent>[], clear?: boolean) {
+    this.waitingEvents.delete(`${[eventGroupId, turn]}`)
+    this.waitingEvents.delete(`${[eventGroupId, turn + 1]}`)
+
+    const eventGroup = [...this.eventGroups]
+      .find((eventGroup) =>
+        eventGroup.id === eventGroupId
+      )
+
+    if (!eventGroup) {
+      throw new Error(`Event group with id "${eventGroupId}" not found`)
+    }
+
+    const map = this.turns.get(eventGroup)!
+    if (clear) map.clear()
+    map.set(turn, turn0)
+    map.set(turn + 1, turn1)
+  }
 
   process() {
     if (!this.running) return true
@@ -129,47 +134,47 @@ export class SchedulerProcessor extends AudioWorkletProcessor {
 
     const prevInternalTime = this.internalTime
     this.internalTime += elapsedTime * this.coeff
-    // console.log(this.internalTime)
     if (prevInternalTime < 0 && this.internalTime > 0) {
       this.internalTime = 0
-      // this.adjustedStartTime = currentTime * this.coeff
+      this.playbackStartTime = now + 0.001
     }
 
-    const needNextEvents: SchedulerEventGroup[] = []
     for (const eventGroup of this.eventGroups) {
-      const { needNext, results: events } = getEventsInRange(
-        this.queue.get(eventGroup)!,
+      const { needTurn, results: events } = getEventsInRange(
+        this.turns.get(eventGroup)!,
         eventGroup.loop,
         eventGroup.loopStart,
         eventGroup.loopEnd,
         this.internalTime,
-        this.sampleTime,
+        this.playbackStartTime,
         this.quantumDurationTime,
-        this.adjustedStartTime,
+        this.sampleTime,
       )
 
       for (const target of eventGroup.targets) {
+        if (this.suspended.has(target.id)) continue
+
         for (const [receivedTime, event] of events) {
           target.midiQueue.push(receivedTime, ...event.midiEvent.data)
         }
       }
 
-      if (needNext && !this.waitingEvents.has(eventGroup.id)) {
-        needNextEvents.push(eventGroup)
-      }
-    }
-
-    if (needNextEvents.length) {
-      for (const eventGroup of needNextEvents) {
-        this.waitingEvents.add(eventGroup.id)
-        this.node.requestNextEvents(
-          eventGroup.id,
-          (eventGroup.events?.turn ?? -1) + 1
-        )
+      if (
+        needTurn >= 0
+        && !this.waitingEvents.has(`${[eventGroup.id, needTurn]}`)
+        && !this.turns.get(eventGroup)!.has(needTurn)
+      ) {
+        this.requestNextEvents(eventGroup.id, needTurn)
       }
     }
 
     return true
+  }
+
+  requestNextEvents(eventGroupId: string, turn: number) {
+    this.waitingEvents.add(`${[eventGroupId, turn]}`)
+    this.waitingEvents.add(`${[eventGroupId, turn + 1]}`)
+    this.node.requestNextEvents(eventGroupId, turn)
   }
 }
 

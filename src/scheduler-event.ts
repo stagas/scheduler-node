@@ -19,8 +19,6 @@ export type LoopKind = ValuesOf<typeof LoopKind>
 export class SchedulerEvent {
   id = cheapRandomId()
 
-  playedAt = -1
-
   midiEvent = {
     data: new Uint8Array(3),
     receivedTime: 0,
@@ -62,7 +60,8 @@ export class SchedulerEventGroup {
   id = cheapRandomId()
 
   targets = new ImmSet<SchedulerTarget>()
-  events?: { id: string, turn: number, events: Set<SchedulerEvent> }
+
+  scheduler?: SchedulerNode
 
   loopPoints = new Float64Array(
     new SharedArrayBuffer(
@@ -79,7 +78,6 @@ export class SchedulerEventGroup {
     return {
       id: this.id,
       targets: this.targets,
-      events: this.events,
       loopPoints: this.loopPoints,
     }
   }
@@ -107,19 +105,25 @@ export class SchedulerEventGroup {
 
   declare onRequestNotes?: (turn: number) => void
 
-  setMidiEvents(midiEvents: WebMidi.MIDIMessageEvent[], turn = 0) {
-    const events = new Set<SchedulerEvent>()
-    for (const midiEvent of midiEvents) {
-      const event = new SchedulerEvent({ midiEvent })
-      events.add(event)
+  setMidiEvents(turnEvents: WebMidi.MIDIMessageEvent[][], turn = 0, clear?: boolean) {
+    const turns: [Set<SchedulerEvent>, Set<SchedulerEvent>] = [new Set(), new Set()]
+
+    for (const [i, midiEvents] of turnEvents.entries()) {
+      const events = turns[i]
+      for (const midiEvent of midiEvents) {
+        const event = new SchedulerEvent({ midiEvent })
+        events.add(event)
+      }
     }
-    this.events = { id: cheapRandomId(), turn, events }
-    return midiEvents
+
+    this.scheduler?.worklet.receiveEvents(this.id, turn, turns, clear)
+
+    return turnEvents
   }
 
-  setNotes(notes: NoteEvent[], turn = 0) {
-    const midiEvents = getMidiEventsForNotes(notes)
-    return this.setMidiEvents(midiEvents, turn)
+  setNotes(turnNotes: NoteEvent[][], turn = 0, clear?: boolean) {
+    const midiEvents = turnNotes.map(getMidiEventsForNotes)
+    return this.setMidiEvents(midiEvents, turn, clear)
   }
 }
 
@@ -141,11 +145,19 @@ export class SchedulerEventGroupNode extends EventTarget {
 
   constructor(public schedulerNode: SchedulerNode) {
     super()
-    this.schedulerNode.eventGroups.add(this.eventGroup)
+    this.schedulerNode.addEventGroup(this.eventGroup)
   }
 
   destroy() {
     this.schedulerNode.eventGroups.delete(this.eventGroup)
+  }
+
+  suspend(targetNode: SchedulerTargetNode) {
+    this.schedulerNode?.worklet.suspendTarget(targetNode.id)
+  }
+
+  resume(targetNode: SchedulerTargetNode) {
+    this.schedulerNode?.worklet.resumeTarget(targetNode.id)
   }
 
   connect(targetNode: SchedulerTargetNode) {

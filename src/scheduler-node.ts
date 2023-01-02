@@ -3,7 +3,7 @@ import { queue } from 'event-toolkit'
 import { SyncedSet } from 'synced-set'
 
 import { core } from './scheduler-core'
-import { SchedulerEvent, SchedulerEventGroup, SchedulerTarget } from './scheduler-event'
+import { SchedulerEventGroup, SchedulerTarget } from './scheduler-event'
 
 import type { ImmSet } from 'immutable-map-set'
 import type { SchedulerProcessor } from './scheduler-processor'
@@ -11,7 +11,6 @@ import type { SchedulerTargetNode } from './scheduler-target-node'
 
 export interface SchedulerSyncedSetPayload {
   targets: ImmSet<SchedulerTarget>
-  events?: { id: string, events: Set<SchedulerEvent> }
 }
 
 export class SchedulerNode extends EventTarget {
@@ -42,18 +41,15 @@ export class SchedulerNode extends EventTarget {
     }),
     pick: [],
     reducer: eventGroup => ({
-      targets: eventGroup.targets,
-      events: eventGroup.events,
+      targets: eventGroup.targets
     }),
     equal: (prev, next) => (
       prev.targets === next.targets
-      && !!prev.events && !!next.events
-      && prev.events?.id === next.events?.id
     ),
   })
 
-  createEventGroup() {
-    const eventGroup = new SchedulerEventGroup()
+  addEventGroup(eventGroup: SchedulerEventGroup) {
+    eventGroup.scheduler = this
     this.eventGroups.add(eventGroup)
     return eventGroup
   }
@@ -62,8 +58,17 @@ export class SchedulerNode extends EventTarget {
     this.eventGroups.delete(eventGroup)
   }
 
-  requestNextEvents(id: string, turn = 0) {
-    [...this.eventGroups].find((eventGroup) => eventGroup.id === id)?.onRequestNotes?.(turn)
+  requestNextEvents(eventGroupId: string, turn = 0) {
+    const eventGroup = [...this.eventGroups]
+      .find((eventGroup) =>
+        eventGroup.id === eventGroupId
+      )
+
+    if (!eventGroup) {
+      throw new Error(`Event group with id "${eventGroupId}" not found`)
+    }
+
+    eventGroup.onRequestNotes?.(turn)
   }
 
   constructor(public context: BaseAudioContext) {

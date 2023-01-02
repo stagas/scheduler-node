@@ -1,16 +1,31 @@
 import { LoopKind, SchedulerEvent } from './scheduler-event'
 
-export type EventTuple = [number, SchedulerEvent]
+export function roundPrecision(num: number, precision: number) {
+  const factor = Math.pow(10, precision.toString().split('.')[1].length);
+  return Math.round(num * factor) / factor;
+}
 
+export function floorPrecision(num: number, precision: number) {
+  const factor = Math.pow(10, precision.toString().split('.')[1].length);
+  return Math.floor(num * factor) / factor;
+}
+
+export function ceilPrecision(num: number, precision: number) {
+  const factor = Math.pow(10, precision.toString().split('.')[1].length);
+  return Math.ceil(num * factor) / factor;
+}
+
+export type EventTuple = [number, SchedulerEvent]
+let prevTurn = -1
 export const getEventsInRange = (
-  allEvents: Map<number, Set<SchedulerEvent>>,
+  turns: Map<number, Set<SchedulerEvent>>,
   loop: LoopKind,
   loopStart: number,
   loopEnd: number,
   currentTime: number,
-  sampleTime: number,
-  quantumDurationTime: number,
   playbackStartTime: number,
+  quantumDurationTime: number,
+  sampleTime: number,
 ) => {
   let startTime: number
   let endTime: number
@@ -20,90 +35,73 @@ export const getEventsInRange = (
 
   const results: EventTuple[] = []
 
-  let needNext = false
+  let needTurn = 0
+  let turn = 0
 
   if (loop) {
     loopDuration = loopEnd - loopStart
 
     offsetTime = currentTime - loopStart
 
+    turn = (offsetTime / loopDuration) | 0
+    needTurn = turn + 2
+    if (turn !== prevTurn) {
+      prevTurn = turn
+    }
+
     startTime = offsetTime % loopDuration
 
     if (startTime < 0) {
-      return { needNext, results }
+      return { needTurn, results }
     }
 
-    endTime = (startTime + quantumDurationTime) % (loopDuration * 2)
+    endTime = startTime + quantumDurationTime
+    endTime = ceilPrecision(endTime, sampleTime)
 
-    if (startTime < sampleTime) startTime = 0
-    if (endTime < sampleTime) endTime = 0
-
-    if (endTime === 0
-      || endTime >= (loopDuration - sampleTime)
-      || allEvents.size < 2
-    ) {
-      needNext = true
-      endTime = (startTime + quantumDurationTime) % loopDuration
-      if (endTime < sampleTime) endTime = 0
+    if (startTime < sampleTime) {
+      startTime = floorPrecision(startTime, sampleTime)
     }
-
   } else {
     startTime = currentTime - playbackStartTime
     endTime = startTime + quantumDurationTime
   }
 
-  const turn = (offsetTime / loopDuration) | 0
-  const [prevEvents, nextEvents] = [allEvents.get(turn), allEvents.get(turn + 1)]
-  const events = [
-    ...[...(prevEvents ?? [])],
-    ...[...(nextEvents ?? [])]
-      .map((ev) => ({
-        ...ev,
-        midiEvent: {
-          ...ev.midiEvent,
-          receivedTime: ev.midiEvent.receivedTime + loopDuration * 1000
-        }
-      } as SchedulerEvent))
-  ]
-
   const isPast = endTime < startTime
+
   const offset = Math[isPast ? 'ceil' : 'floor'](startTime / loopDuration) * loopDuration + playbackStartTime + (offsetTime - startTime)
 
-  for (const event of [...events]) {
-    const eventTime = event.midiEvent.receivedTime * 0.001 // ms to seconds
+  for (let t = 0; t <= 1; t++) {
+    const events = turns.get(turn + t)
+    if (events) for (const event of events) {
+      const eventTime = event.midiEvent.receivedTime * 0.001 // ms to seconds
+        + loopDuration * t
 
-    if (loop === LoopKind.Live) {
-      if (
-        (event.playedAt < 0 || offsetTime < event.playedAt)
-        && (
-          eventTime === startTime && startTime === endTime
-          || (isPast
-            ? eventTime >= loopStart && eventTime < endTime
-            : eventTime >= startTime && eventTime < endTime)
-        )
+      if (eventTime > endTime) break
+
+      if (loop === LoopKind.Live) {
+        if (eventTime >= startTime) {
+          let receivedTime = eventTime + offset
+          receivedTime *= 1000
+          results.push([receivedTime, event])
+        }
+      }
+      else if (
+        eventTime === startTime && startTime === endTime
+        || (isPast
+          ? eventTime >= loopStart && eventTime < endTime
+          : eventTime >= startTime && eventTime < endTime)
       ) {
-        let receivedTime = eventTime + offset
-        event.playedAt = receivedTime
+        let receivedTime: number
+        if (loop) {
+          receivedTime = eventTime + offset
+        } else {
+          receivedTime = eventTime + playbackStartTime
+        }
         receivedTime *= 1000
         results.push([receivedTime, event])
       }
     }
-    else if (
-      eventTime === startTime && startTime === endTime
-      || (isPast
-        ? eventTime >= loopStart && eventTime < endTime
-        : eventTime >= startTime && eventTime < endTime)
-    ) {
-      let receivedTime: number
-      if (loop) {
-        receivedTime = eventTime + offset
-      } else {
-        receivedTime = eventTime + playbackStartTime
-      }
-      receivedTime *= 1000
-      results.push([receivedTime, event])
-    }
   }
 
-  return { needNext, results }
+  return { needTurn, results }
 }

@@ -21,7 +21,7 @@ const { replacer, reviver } = createSerializeContext([
 const { objectify, deobjectify } = createObjectifyContext([Float64Array, Uint8Array])
 
 export const core = {
-  pickFromLocal: ['id', 'targets', 'events', 'loopPoints'] as (keyof SchedulerEventGroup)[],
+  pickFromLocal: ['id', 'targets', 'loopPoints'] as (keyof SchedulerEventGroup)[],
   serialize: (data: any) => objectify(data, replacer(data)),
   deserialize: (data: any) => deobjectify(data, reviver(deserializableClasses)) as any,
 }
