@@ -12,7 +12,6 @@ let lastReceivedTime = currentTime
 export class SchedulerProcessor extends AudioWorkletProcessor {
   blockSize = 128
 
-  private sampleTime = 1 / sampleRate
   private quantumDurationTime = this.blockSize / sampleRate
   private bpm = 120
 
@@ -90,7 +89,6 @@ export class SchedulerProcessor extends AudioWorkletProcessor {
     this.bpm = bpm
 
     this.coeff = 1 / ((60 * 4) / this.bpm)
-    this.sampleTime = (1 / sampleRate) / this.coeff
     this.quantumDurationTime = (this.blockSize / sampleRate) * this.coeff
 
     return this.coeff
@@ -148,7 +146,6 @@ export class SchedulerProcessor extends AudioWorkletProcessor {
         this.internalTime,
         this.playbackStartTime,
         this.quantumDurationTime,
-        this.sampleTime,
       )
 
       for (const target of eventGroup.targets) {
