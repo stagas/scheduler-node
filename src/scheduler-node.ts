@@ -58,7 +58,7 @@ export class SchedulerNode extends EventTarget {
     this.eventGroups.delete(eventGroup)
   }
 
-  requestNextEvents(eventGroupId: string, turn = 0) {
+  requestNextEvents(eventGroupId: string, turn = 0, total = 4) {
     const eventGroup = [...this.eventGroups]
       .find((eventGroup) =>
         eventGroup.id === eventGroupId
@@ -68,7 +68,7 @@ export class SchedulerNode extends EventTarget {
       throw new Error(`Event group with id "${eventGroupId}" not found`)
     }
 
-    eventGroup.onRequestNotes?.(turn)
+    eventGroup.onRequestNotes?.(turn, total)
   }
 
   constructor(public context: BaseAudioContext) {
@@ -89,12 +89,16 @@ export class SchedulerNode extends EventTarget {
     this.worklet = worklet
   }
 
-  start(playbackStartTime?: number) {
-    return this.worklet.start(playbackStartTime)
+  start(playbackStartTime?: number, offsetStartTime?: number) {
+    return this.worklet.start(playbackStartTime, offsetStartTime)
   }
 
   stop() {
     this.worklet.stop()
+  }
+
+  seek(seekTime: number) {
+    return this.worklet.seek(seekTime)
   }
 
   setBpm(bpm: number) {

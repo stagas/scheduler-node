@@ -19,6 +19,8 @@ export abstract class SchedulerTargetProcessor extends AudioWorkletProcessor {
 
   private didError = false
 
+  isReady = false
+
   constructor() {
     super()
 
@@ -52,6 +54,7 @@ export abstract class SchedulerTargetProcessor extends AudioWorkletProcessor {
     outputs: Float32Array[][],
     parameters: Record<string, Float32Array>,
   ): boolean {
+    if (!this.isReady) return true
     if (this.didError) return true
 
     // TODO: optimizations possible:
@@ -73,7 +76,7 @@ export abstract class SchedulerTargetProcessor extends AudioWorkletProcessor {
       event.data.set(message.subarray(1))
       event.receivedTime = message[0] || (currentTime * 1000)
       event.receivedFrame = Math.floor(event.receivedTime * 0.001 * sampleRate)
-      event.offsetFrame = event.receivedFrame - currentFrame
+      event.offsetFrame = Math.max(0, event.receivedFrame - currentFrame)
       event.deltaFrame = Math.max(0, event.offsetFrame - prevFrame)
       prevFrame = event.offsetFrame
       midiEvents.push(event)
@@ -87,6 +90,7 @@ export abstract class SchedulerTargetProcessor extends AudioWorkletProcessor {
     try {
       return this.processWithMidi(inputs, outputs, parameters, midiEvents)
     } catch (error) {
+      console.warn('Processor errored. Maybe currentTime is not set yet?')
       console.warn(error)
       this.didError = true
       return true

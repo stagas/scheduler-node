@@ -103,10 +103,10 @@ export class SchedulerEventGroup {
     this.loopPoints[2] = seconds
   }
 
-  declare onRequestNotes?: (turn: number) => void
+  declare onRequestNotes?: (turn: number, total: number) => void
 
   setMidiEvents(turnEvents: WebMidi.MIDIMessageEvent[][], turn = 0, clear?: boolean) {
-    const turns: [Set<SchedulerEvent>, Set<SchedulerEvent>] = [new Set(), new Set()]
+    const turns: Set<SchedulerEvent>[] = turnEvents.map(() => new Set())
 
     for (const [i, midiEvents] of turnEvents.entries()) {
       const events = turns[i]
@@ -122,16 +122,22 @@ export class SchedulerEventGroup {
   }
 
   setNotes(turnNotes: NoteEvent[][], turn = 0, clear?: boolean) {
-    const midiEvents = turnNotes.map(getMidiEventsForNotes)
+    const midiEvents = turnNotes.map(note => getMidiEventsForNotes(note))
     return this.setMidiEvents(midiEvents, turn, clear)
   }
 }
 
-export function getMidiEventsForNotes(notes: NoteEvent[]) {
+export function getMidiEventsForNotes(notes: NoteEvent[], bars?: number, sampleRate: number = 44100) {
   const midiEvents = []
 
-  for (const [time, note, velocity, length] of notes) {
-    midiEvents.push(...createMidiNoteEvents(time, note, velocity, length))
+  // eslint-disable-next-line prefer-const
+  for (let [i, [time, note, velocity, length]] of notes.entries()) {
+    if (time != null && note != null && velocity != null) {
+      if (!length) {
+        length = ((notes[i + 1]?.[0] ?? bars) - time) - (1 / sampleRate) * 2
+      }
+      midiEvents.push(...createMidiNoteEvents(time, note, velocity, length))
+    }
   }
 
   return midiEvents
@@ -149,7 +155,7 @@ export class SchedulerEventGroupNode extends EventTarget {
   }
 
   destroy() {
-    this.schedulerNode.eventGroups.delete(this.eventGroup)
+    this.schedulerNode.removeEventGroup(this.eventGroup)
   }
 
   suspend(targetNode: SchedulerTargetNode) {
@@ -158,6 +164,10 @@ export class SchedulerEventGroupNode extends EventTarget {
 
   resume(targetNode: SchedulerTargetNode) {
     this.schedulerNode?.worklet.resumeTarget(targetNode.id)
+  }
+
+  clear() {
+    this.schedulerNode?.worklet.clearEventGroup(this.eventGroup.id)
   }
 
   connect(targetNode: SchedulerTargetNode) {

@@ -18,6 +18,7 @@ export class SchedulerProcessor extends AudioWorkletProcessor {
   coeff = 1
   playbackStartTime = 0
   adjustedStartTime = 0
+  offsetStartTime = 0
   internalTime = 0
   diffTime = 0
   running = false
@@ -56,7 +57,7 @@ export class SchedulerProcessor extends AudioWorkletProcessor {
 
     this.eventGroups.on('add', (eventGroup) => {
       this.turns.set(eventGroup, new Map())
-      this.requestNextEvents(eventGroup.id, 0)
+      this.requestNextEvents(eventGroup.id, 0, 2)
     })
 
     this.eventGroups.on('delete', (eventGroup) => {
@@ -64,12 +65,13 @@ export class SchedulerProcessor extends AudioWorkletProcessor {
     })
   }
 
-  async start(playbackStartTime = currentTime) {
+  async start(playbackStartTime = currentTime, offsetStartTime = 0) {
     this.running = true
     this.diffTime = playbackStartTime - currentTime
     this.playbackStartTime = playbackStartTime
     this.adjustedStartTime = this.playbackStartTime * this.coeff
     this.internalTime = -this.diffTime
+    this.offsetStartTime = offsetStartTime
 
     lastReceivedTime = currentTime
 
@@ -78,17 +80,17 @@ export class SchedulerProcessor extends AudioWorkletProcessor {
 
   stop() {
     this.running = false
+  }
 
-    this.eventGroups.forEach((eventGroup) => {
-      this.turns.get(eventGroup)!.clear()
-      this.requestNextEvents(eventGroup.id, 0)
-    })
+  async seek(seekTime: number) {
+    this.internalTime += seekTime
+    return this.internalTime + this.offsetStartTime
   }
 
   async setBpm(bpm: number) {
     this.bpm = bpm
 
-    this.coeff = 1 / ((60 * 4) / this.bpm)
+    this.coeff = this.bpm / (60 * 4)
     this.quantumDurationTime = (this.blockSize / sampleRate) * this.coeff
 
     return this.coeff
@@ -102,11 +104,20 @@ export class SchedulerProcessor extends AudioWorkletProcessor {
     this.suspended.delete(targetId)
   }
 
+  clearEventGroup(eventGroupId: string) {
+    const eventGroup = [...this.eventGroups]
+      .find((eventGroup) =>
+        eventGroup.id === eventGroupId
+      )
+    this.turns.get(eventGroup!)!.clear()
+  }
+
   waitingEvents = new Set<string>()
 
-  receiveEvents(eventGroupId: string, turn: number, [turn0, turn1]: Set<SchedulerEvent>[], clear?: boolean) {
-    this.waitingEvents.delete(`${[eventGroupId, turn]}`)
-    this.waitingEvents.delete(`${[eventGroupId, turn + 1]}`)
+  receiveEvents(eventGroupId: string, turn: number, turns: Set<SchedulerEvent>[], clear?: boolean) {
+    for (let i = turn; i < turn + turns.length; i++) {
+      this.waitingEvents.delete(`${[eventGroupId, i]}`)
+    }
 
     const eventGroup = [...this.eventGroups]
       .find((eventGroup) =>
@@ -119,8 +130,10 @@ export class SchedulerProcessor extends AudioWorkletProcessor {
 
     const map = this.turns.get(eventGroup)!
     if (clear) map.clear()
-    map.set(turn, turn0)
-    map.set(turn + 1, turn1)
+
+    for (let i = turn, x = 0; i < turn + turns.length; i++) {
+      map.set(i, turns[x++])
+    }
   }
 
   process() {
@@ -143,7 +156,7 @@ export class SchedulerProcessor extends AudioWorkletProcessor {
         eventGroup.loop,
         eventGroup.loopStart,
         eventGroup.loopEnd,
-        this.internalTime,
+        this.internalTime + this.offsetStartTime,
         this.playbackStartTime,
         this.quantumDurationTime,
       )
@@ -152,26 +165,33 @@ export class SchedulerProcessor extends AudioWorkletProcessor {
         if (this.suspended.has(target.id)) continue
 
         for (const [receivedTime, event] of events) {
-          target.midiQueue.push(receivedTime, ...event.midiEvent.data)
+          target.midiQueue.push(receivedTime - this.offsetStartTime * 1000, ...event.midiEvent.data)
         }
       }
 
       if (
         needTurn >= 0
-        && !this.waitingEvents.has(`${[eventGroup.id, needTurn]}`)
-        && !this.turns.get(eventGroup)!.has(needTurn)
+        && (
+          !this.waitingEvents.has(`${[eventGroup.id, needTurn]}`)
+          || !this.waitingEvents.has(`${[eventGroup.id, needTurn + 1]}`)
+        )
+        && (
+          !this.turns.get(eventGroup)!.has(needTurn)
+          || !this.turns.get(eventGroup)!.has(needTurn + 1)
+        )
       ) {
-        this.requestNextEvents(eventGroup.id, needTurn)
+        this.requestNextEvents(eventGroup.id, needTurn, 2)
       }
     }
 
     return true
   }
 
-  requestNextEvents(eventGroupId: string, turn: number) {
-    this.waitingEvents.add(`${[eventGroupId, turn]}`)
-    this.waitingEvents.add(`${[eventGroupId, turn + 1]}`)
-    this.node.requestNextEvents(eventGroupId, turn)
+  requestNextEvents(eventGroupId: string, turn: number, total: number) {
+    for (let i = 0; i < total; i++) {
+      this.waitingEvents.add(`${[eventGroupId, turn + i]}`)
+    }
+    this.node.requestNextEvents(eventGroupId, turn, total)
   }
 }
 

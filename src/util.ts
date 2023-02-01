@@ -1,7 +1,7 @@
 import { LoopKind, SchedulerEvent } from './scheduler-event'
 
 export type EventTuple = [number, SchedulerEvent]
-let prevTurn = -1
+
 export const getEventsInRange = (
   turns: Map<number, Set<SchedulerEvent>>,
   loop: LoopKind,
@@ -28,10 +28,7 @@ export const getEventsInRange = (
     offsetTime = currentTime - loopStart
 
     turn = (offsetTime / loopDuration) | 0
-    needTurn = turn + 2
-    if (turn !== prevTurn) {
-      prevTurn = turn
-    }
+    needTurn = turn
 
     startTime = offsetTime
 
