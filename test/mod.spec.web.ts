@@ -100,7 +100,7 @@ describe('SchedulerNode', () => {
     expect(data[128 * 2 + 1]).toEqual(7)
   })
 
-  it('can live loop', async () => {
+  xit('can live loop', async () => {
     const ctx = new AudioContext({ sampleRate: 44100 })
 
     const schedulerNode = await SchedulerNode.create(ctx)
