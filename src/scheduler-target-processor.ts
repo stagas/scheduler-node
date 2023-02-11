@@ -5,6 +5,8 @@ import type { SchedulerTargetNode } from './scheduler-target-node'
 
 export { MIDIMessageEvent }
 
+export * from './clock'
+
 const sortByFrame = (a: MIDIMessageEvent, b: MIDIMessageEvent) => a.offsetFrame - b.offsetFrame
 
 const midiEvents: MIDIMessageEvent[] = []
@@ -74,7 +76,7 @@ export abstract class SchedulerTargetProcessor extends AudioWorkletProcessor {
       const event = midiEventPool[midiEventPoolPtr]
       midiEventPoolPtr = (midiEventPoolPtr + 1) % midiEventPool.length
       event.data.set(message.subarray(1))
-      event.receivedTime = message[0] || (currentTime * 1000)
+      event.receivedTime = message[0] //message[0] < 0 ? (currentTime * 1000) : message[0]
       event.receivedFrame = Math.floor(event.receivedTime * 0.001 * sampleRate)
       event.offsetFrame = Math.max(0, event.receivedFrame - currentFrame)
       event.deltaFrame = Math.max(0, event.offsetFrame - prevFrame)

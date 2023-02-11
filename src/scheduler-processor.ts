@@ -6,22 +6,19 @@ import { getEventsInRange } from './util'
 
 import type { SchedulerEvent, SchedulerEventGroup } from './scheduler-event'
 import type { SchedulerNode, SchedulerSyncedSetPayload } from './scheduler-node'
+import { Clock } from './clock'
 
 let lastReceivedTime = currentTime
 
 export class SchedulerProcessor extends AudioWorkletProcessor {
-  blockSize = 128
-
-  private quantumDurationTime = this.blockSize / sampleRate
-  private bpm = 120
-
-  coeff = 1
-  playbackStartTime = 0
-  adjustedStartTime = 0
-  offsetStartTime = 0
-  internalTime = 0
-  diffTime = 0
   running = false
+
+  clock = new Clock()
+
+  blockSize = 128
+  blockTime = this.blockSize / sampleRate
+
+  diffTime = 0
 
   eventGroups = new SyncedSet<SchedulerEventGroup, SchedulerSyncedSetPayload>({
     send: (_, cb) => cb(),
@@ -65,35 +62,28 @@ export class SchedulerProcessor extends AudioWorkletProcessor {
     })
   }
 
-  async start(playbackStartTime = currentTime, offsetStartTime = 0) {
+  setBpm(bpm: number) {
+    this.clock.coeff = bpm / (60 * 4)
+    // this.clock.offsetFrame = currentFrame
+    this.blockTime = (this.blockSize / sampleRate) * this.clock.coeff
+    // TODO: emit sync?
+  }
+
+  setClockBuffer(clockBuffer: Float64Array) {
+    this.clock.buffer = clockBuffer
+  }
+
+  start(playbackStartTime = currentTime, offsetStartTime = 0) {
     this.running = true
     this.diffTime = playbackStartTime - currentTime
-    this.playbackStartTime = playbackStartTime
-    this.adjustedStartTime = this.playbackStartTime * this.coeff
-    this.internalTime = -this.diffTime
-    this.offsetStartTime = offsetStartTime
-
+    // console.log('DIFF TIME', this.diffTime)
+    this.clock.internalTime = -this.diffTime * this.clock.coeff
+    // this.clock.internalTime = offsetStartTime - this.diffTime * this.clock.coeff
     lastReceivedTime = currentTime
-
-    return this.playbackStartTime
   }
 
   stop() {
     this.running = false
-  }
-
-  async seek(seekTime: number) {
-    this.internalTime += seekTime
-    return this.internalTime + this.offsetStartTime
-  }
-
-  async setBpm(bpm: number) {
-    this.bpm = bpm
-
-    this.coeff = this.bpm / (60 * 4)
-    this.quantumDurationTime = (this.blockSize / sampleRate) * this.coeff
-
-    return this.coeff
   }
 
   suspendTarget(targetId: string) {
@@ -143,29 +133,32 @@ export class SchedulerProcessor extends AudioWorkletProcessor {
     const elapsedTime = now - lastReceivedTime
     lastReceivedTime = now
 
-    const prevInternalTime = this.internalTime
-    this.internalTime += elapsedTime * this.coeff
-    if (prevInternalTime < 0 && this.internalTime > 0) {
-      this.internalTime = 0
-      this.playbackStartTime = now + 0.001
+    const prevInternalTime = this.clock.internalTime
+
+    this.clock.internalTime += elapsedTime * this.clock.coeff
+
+    if (prevInternalTime < 0 && this.clock.internalTime > 0) {
+      this.clock.internalTime = 0
+      this.clock.offsetFrame = currentFrame
     }
+
+    // if (this.clock.internalTime % 1 < 0.001) {
+    //   this.clock.offsetFrame = currentFrame
+    // }
 
     for (const eventGroup of this.eventGroups) {
       const { needTurn, results: events } = getEventsInRange(
+        this.clock.internalTime,
+        this.blockTime,
+        eventGroup,
         this.turns.get(eventGroup)!,
-        eventGroup.loop,
-        eventGroup.loopStart,
-        eventGroup.loopEnd,
-        this.internalTime + this.offsetStartTime,
-        this.playbackStartTime,
-        this.quantumDurationTime,
       )
 
       for (const target of eventGroup.targets) {
         if (this.suspended.has(target.id)) continue
 
         for (const [receivedTime, event] of events) {
-          target.midiQueue.push(receivedTime - this.offsetStartTime * 1000, ...event.midiEvent.data)
+          target.midiQueue.push(receivedTime, ...event.midiEvent.data)
         }
       }
 

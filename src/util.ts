@@ -1,16 +1,15 @@
-import { LoopKind, SchedulerEvent } from './scheduler-event'
+import { SchedulerEvent, SchedulerEventGroup } from './scheduler-event'
 
 export type EventTuple = [number, SchedulerEvent]
 
-export const getEventsInRange = (
-  turns: Map<number, Set<SchedulerEvent>>,
-  loop: LoopKind,
-  loopStart: number,
-  loopEnd: number,
+export function getEventsInRange(
   currentTime: number,
-  playbackStartTime: number,
   quantumDurationTime: number,
-) => {
+  eventGroup: SchedulerEventGroup,
+  turns: Map<number, Set<SchedulerEvent>>,
+) {
+  const { loop, loopStart, loopEnd } = eventGroup
+
   let startTime: number
   let endTime: number
   let offsetTime = 0
@@ -38,7 +37,7 @@ export const getEventsInRange = (
 
     endTime = startTime + quantumDurationTime
   } else {
-    startTime = currentTime - playbackStartTime
+    startTime = currentTime
     endTime = startTime + quantumDurationTime
   }
 
@@ -50,18 +49,20 @@ export const getEventsInRange = (
       // collides the end with the start sometimes
       + 0.00001
 
-    if (events) for (const event of events) {
-      const eventTime = event.midiEvent.receivedTime * 0.001 // ms to seconds
-        + offset
+    if (events)
+      for (const event of events) {
+        const eventTime = event.midiEvent.receivedTime * 0.001 // ms to seconds
+          + offset
 
-      if (eventTime > endTime) break
+        if (eventTime > endTime)
+          break
 
-      if (eventTime > startTime) {
-        let receivedTime = eventTime
-        receivedTime *= 1000
-        results.push([receivedTime, event])
+        if (eventTime > startTime) {
+          let receivedTime = eventTime
+          receivedTime *= 1000
+          results.push([receivedTime, event])
+        }
       }
-    }
   }
 
   return { needTurn, results }

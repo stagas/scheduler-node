@@ -94,15 +94,15 @@ export class SchedulerNode extends EventTarget {
   }
 
   stop() {
-    this.worklet.stop()
-  }
-
-  seek(seekTime: number) {
-    return this.worklet.seek(seekTime)
+    return this.worklet.stop()
   }
 
   setBpm(bpm: number) {
     return this.worklet.setBpm(bpm)
+  }
+
+  setClockBuffer(clockBuffer: Float64Array) {
+    return this.worklet.setClockBuffer(clockBuffer)
   }
 
   connect(targetNode: SchedulerTargetNode) {
