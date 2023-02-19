@@ -65,7 +65,8 @@ export class SchedulerNode extends EventTarget {
       )
 
     if (!eventGroup) {
-      throw new Error(`Event group with id "${eventGroupId}" not found`)
+      console.warn(`Event group with id "${eventGroupId}" not found`)
+      return
     }
 
     eventGroup.onRequestNotes?.(turn, total)

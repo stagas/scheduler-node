@@ -64,9 +64,7 @@ export class SchedulerProcessor extends AudioWorkletProcessor {
 
   setBpm(bpm: number) {
     this.clock.coeff = bpm / (60 * 4)
-    // this.clock.offsetFrame = currentFrame
     this.blockTime = (this.blockSize / sampleRate) * this.clock.coeff
-    // TODO: emit sync?
   }
 
   setClockBuffer(clockBuffer: Float64Array) {
@@ -76,9 +74,7 @@ export class SchedulerProcessor extends AudioWorkletProcessor {
   start(playbackStartTime = currentTime, offsetStartTime = 0) {
     this.running = true
     this.diffTime = playbackStartTime - currentTime
-    // console.log('DIFF TIME', this.diffTime)
     this.clock.internalTime = -this.diffTime * this.clock.coeff
-    // this.clock.internalTime = offsetStartTime - this.diffTime * this.clock.coeff
     lastReceivedTime = currentTime
   }
 
@@ -87,6 +83,14 @@ export class SchedulerProcessor extends AudioWorkletProcessor {
   }
 
   suspendTarget(targetId: string) {
+    out: for (const eventGroup of this.eventGroups) {
+      for (const target of eventGroup.targets) {
+        if (target.id === targetId) {
+          target.midiQueue.clear()
+          break out
+        }
+      }
+    }
     this.suspended.add(targetId)
   }
 
@@ -142,10 +146,6 @@ export class SchedulerProcessor extends AudioWorkletProcessor {
       this.clock.offsetFrame = currentFrame
     }
 
-    // if (this.clock.internalTime % 1 < 0.001) {
-    //   this.clock.offsetFrame = currentFrame
-    // }
-
     for (const eventGroup of this.eventGroups) {
       const { needTurn, results: events } = getEventsInRange(
         this.clock.internalTime,
@@ -181,10 +181,14 @@ export class SchedulerProcessor extends AudioWorkletProcessor {
   }
 
   requestNextEvents(eventGroupId: string, turn: number, total: number) {
-    for (let i = 0; i < total; i++) {
-      this.waitingEvents.add(`${[eventGroupId, turn + i]}`)
+    try {
+      this.node.requestNextEvents(eventGroupId, turn, total)
+      for (let i = 0; i < total; i++) {
+        this.waitingEvents.add(`${[eventGroupId, turn + i]}`)
+      }
+    } catch (error) {
+      console.warn(error)
     }
-    this.node.requestNextEvents(eventGroupId, turn, total)
   }
 }
 

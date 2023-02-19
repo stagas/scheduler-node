@@ -44,6 +44,9 @@ export class SchedulerTargetNode extends AudioWorkletNode {
     if (midiEvent.receivedTime == null) {
       throw new Error('Midi event missing receivedTime')
     }
-    this.schedulerTarget.midiQueue.push(midiEvent.receivedTime, ...midiEvent.data)
+    this.schedulerTarget.midiQueue.push(
+      midiEvent.receivedTime >= 0 ? midiEvent.receivedTime : this.context.currentTime,
+      ...midiEvent.data
+    )
   }
 }
