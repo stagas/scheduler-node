@@ -16,4 +16,4 @@ export function getMidiEventsForNotes(notes: NoteEvent[], bars?: number, sampleR
   return midiEvents
 }
 
-export type NoteEvent = [number, number, number, number]
+export type NoteEvent = [number, number, number] | [number, number, number, number]
