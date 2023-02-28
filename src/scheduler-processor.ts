@@ -103,7 +103,8 @@ export class SchedulerProcessor extends AudioWorkletProcessor {
       .find((eventGroup) =>
         eventGroup.id === eventGroupId
       )
-    this.turns.get(eventGroup!)!.clear()
+    this.waitingEvents.clear()
+    this.turns.get(eventGroup!)?.clear()
   }
 
   waitingEvents = new Set<string>()
@@ -119,7 +120,10 @@ export class SchedulerProcessor extends AudioWorkletProcessor {
       )
 
     if (!eventGroup) {
-      throw new Error(`Event group with id "${eventGroupId}" not found`)
+      console.warn(
+        `Event group with id "${eventGroupId}" not found`
+      )
+      return
     }
 
     const map = this.turns.get(eventGroup)!
@@ -138,17 +142,18 @@ export class SchedulerProcessor extends AudioWorkletProcessor {
     lastReceivedTime = now
 
     const prevInternalTime = this.clock.internalTime
-
-    this.clock.internalTime += elapsedTime * this.clock.coeff
+    const addTime = elapsedTime * this.clock.coeff
+    let internalTime = prevInternalTime + addTime
+    this.clock.internalTime = internalTime
 
     if (prevInternalTime < 0 && this.clock.internalTime > 0) {
-      this.clock.internalTime = 0
+      internalTime = this.clock.internalTime = 0
       this.clock.offsetFrame = currentFrame
     }
 
     for (const eventGroup of this.eventGroups) {
       const { needTurn, results: events } = getEventsInRange(
-        this.clock.internalTime,
+        internalTime,
         this.blockTime,
         eventGroup,
         this.turns.get(eventGroup)!,
