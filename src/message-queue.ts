@@ -1,6 +1,6 @@
 export class MessageQueue {
   buffer: Float64Array | Float32Array = new Float64Array(
-    new SharedArrayBuffer(8192 * Float64Array.BYTES_PER_ELEMENT)
+    new SharedArrayBuffer(8192 * 2 * Float64Array.BYTES_PER_ELEMENT)
   )
 
   constructor(messageQueue: Partial<MessageQueue> = {}) {
@@ -42,7 +42,10 @@ export class MessageQueue {
 
     buffer.set(values, ptr)
 
-    this.writePtr = ptr + values.length
+    const nextPtr = ptr + values.length
+    if (nextPtr < this.buffer.length) {
+      this.writePtr = nextPtr
+    }
   }
 
   shift() {
