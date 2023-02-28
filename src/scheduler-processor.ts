@@ -74,7 +74,7 @@ export class SchedulerProcessor extends AudioWorkletProcessor {
   start(playbackStartTime = currentTime, offsetStartTime = 0) {
     this.running = true
     this.diffTime = playbackStartTime - currentTime
-    this.clock.internalTime = -this.diffTime * this.clock.coeff
+    this.clock.internalTime = -this.diffTime * this.clock.coeff + offsetStartTime
     lastReceivedTime = currentTime
   }
 
