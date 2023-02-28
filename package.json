@@ -18,6 +18,10 @@
       "import": "./dist/esm/index.js",
       "require": "./dist/cjs/index.js"
     },
+    "./event-util": {
+      "import": "./dist/esm/event-util.js",
+      "require": "./dist/cjs/event-util.js"
+    },
     "./node": {
       "import": "./dist/esm/scheduler-node.js",
       "require": "./dist/cjs/scheduler-node.js"
@@ -37,6 +41,9 @@
   },
   "typesVersions": {
     "*": {
+      "event-util": [
+        "./dist/types/event-util.d.ts"
+      ],
       "node": [
         "./dist/types/scheduler-node.d.ts"
       ],
