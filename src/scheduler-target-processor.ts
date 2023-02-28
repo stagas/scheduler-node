@@ -51,6 +51,8 @@ export abstract class SchedulerTargetProcessor extends AudioWorkletProcessor {
     midiEvents: MIDIMessageEvent[],
   ): boolean
 
+  prevFrame = 0
+
   process(
     inputs: Float32Array[][],
     outputs: Float32Array[][],
@@ -66,8 +68,6 @@ export abstract class SchedulerTargetProcessor extends AudioWorkletProcessor {
 
     let message: MessageQueue['buffer'] | void
 
-    let prevFrame = 0
-
     let max = 16
 
     midiEvents.splice(0)
@@ -76,11 +76,18 @@ export abstract class SchedulerTargetProcessor extends AudioWorkletProcessor {
       const event = midiEventPool[midiEventPoolPtr]
       midiEventPoolPtr = (midiEventPoolPtr + 1) % midiEventPool.length
       event.data.set(message.subarray(1))
-      event.receivedTime = message[0] //message[0] < 0 ? (currentTime * 1000) : message[0]
+      event.receivedTime = message[0]
+
       event.receivedFrame = Math.floor(event.receivedTime * 0.001 * sampleRate)
       event.offsetFrame = Math.max(0, event.receivedFrame - currentFrame)
-      event.deltaFrame = Math.max(0, event.offsetFrame - prevFrame)
-      prevFrame = event.offsetFrame
+      event.deltaFrame = Math.max(0, event.offsetFrame - this.prevFrame)
+
+      this.prevFrame = event.offsetFrame
+
+      if (event.deltaFrame > 128) {
+        event.deltaFrame = 0
+      }
+
       midiEvents.push(event)
     }
 
@@ -92,8 +99,8 @@ export abstract class SchedulerTargetProcessor extends AudioWorkletProcessor {
     try {
       return this.processWithMidi(inputs, outputs, parameters, midiEvents)
     } catch (error) {
-      console.warn('Processor errored. Maybe currentTime is not set yet?')
-      console.warn(error)
+      console.log('Processor errored. Maybe currentTime is not set yet?')
+      console.log(error)
       this.didError = true
       return true
     }
